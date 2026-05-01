@@ -32,12 +32,12 @@ jobs:
       - name: Build CLI.exe
         shell: pwsh
         run: |
-          pyinstaller --onefile src/open_codex/main.py -n cli
+          pyinstaller --onefile --paths src src/open_codex/main.py -n cli
 
       - name: Build Desktop.exe
         shell: pwsh
         run: |
-          pyinstaller --onefile src/open_codex/main.py -n desktop
+          pyinstaller --onefile --paths src src/open_codex/main.py -n desktop
 
       - name: Prepare Artifacts
         shell: pwsh
