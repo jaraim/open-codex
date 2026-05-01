@@ -42,13 +42,13 @@ jobs:
         shell: pwsh
         run: |
           # 固定入口 src/open_codex/main.py 通用路径
-          pyinstaller --onefile src/open_codex/main.py -n cli
+          pyinstaller --onefile --clean src/open_codex/main.py -n cli
 
       # 5. 通用构建 Desktop 桌面版（GUI 无黑框）
       - name: Build Desktop.exe
         shell: pwsh
         run: |
-          pyinstaller --onefile --windowed src/open_codex/main.py -n desktop
+          pyinstaller --onefile --windowed --clean src/open_codex/main.py -n desktop
 
       # 6. 统一整理所有编译产物到 dist_final 目录
       - name: Organize Build Artifacts
@@ -92,9 +92,9 @@ Type: dirifempty; Name: "{app}"
           # 写入临时安装脚本
           $issContent | Out-File -FilePath "temp_install.iss" -Encoding utf8
 
-      # 8. 编译生成 install.exe 安装程序
+      # 8. 编译生成 install.exe 安装程序（替换为稳定的 action）
       - name: Compile install.exe Installer
-        uses: jonathanpoelen/innosetup-action@v1
+        uses: MiniumDevelopment/innosetup-action@v1
         with:
           script: ./temp_install.iss
 
@@ -105,48 +105,15 @@ Type: dirifempty; Name: "{app}"
           name: Windows-Build-All
           path: dist_final/
 
-      # 10. 自动创建 Release 标签与页面
-      - name: Create Auto Release
-        id: create_auto_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 10. 一步到位创建 Release 并上传所有文件（替代旧的 create-release + upload-release-asset）
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
         with:
-          # 通用标签：仓库名+运行编号，不重复
           tag_name: ${{ github.event.repository.name }}-build-${{ github.run_number }}
-          release_name: ${{ github.event.repository.name }} Windows 构建 #${{ github.run_number }}
+          name: ${{ github.event.repository.name }} Windows 构建 #${{ github.run_number }}
           draft: false
           prerelease: false
-
-      # 11. 自动上传 cli.exe 到 Releases
-      - name: Upload cli.exe To Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_auto_release.outputs.upload_url }}
-          asset_path: dist_final/cli.exe
-          asset_name: cli.exe
-          asset_content_type: application/octet-stream
-
-      # 12. 自动上传 desktop.exe 到 Releases
-      - name: Upload desktop.exe To Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_auto_release.outputs.upload_url }}
-          asset_path: dist_final/desktop.exe
-          asset_name: desktop.exe
-          asset_content_type: application/octet-stream
-
-      # 13. 自动上传 install.exe 安装版到 Releases
-      - name: Upload install.exe Installer To Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_auto_release.outputs.upload_url }}
-          asset_path: dist_final/install.exe
-          asset_name: install.exe
-          asset_content_type: application/octet-stream
+          files: |
+            dist_final/cli.exe
+            dist_final/desktop.exe
+            dist_final/install.exe
