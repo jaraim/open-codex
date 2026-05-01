@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install Global Dependencies
+      - name: Install Dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
@@ -37,16 +37,22 @@ jobs:
       - name: Build Desktop.exe
         shell: pwsh
         run: |
-          pyinstaller --onefile --windowed src/open_codex/main.py -n desktop
+          pyinstaller --onefile src/open_codex/main.py -n desktop
 
-      - name: Organize Build Artifacts
+      - name: Prepare Artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "dist_final"
-          Copy-Item -Path "dist/cli.exe" -Destination "dist_final/" -Force
-          Copy-Item -Path "dist/desktop.exe" -Destination "dist_final/" -Force
+          if (Test-Path "dist/cli.exe") { Copy-Item -Path "dist/cli.exe" -Destination "dist_final/cli.exe" }
+          if (Test-Path "dist/desktop.exe") { Copy-Item -Path "dist/desktop.exe" -Destination "dist_final/desktop.exe" }
 
-      - name: Auto Generate Inno Setup Script
+      # 使用 chocolatey 安装 Inno Setup，避免依赖不确定的第三方 Action
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+
+      - name: Generate Inno Setup Script
         shell: pwsh
         run: |
           $repoName = "${{ github.event.repository.name }}"
@@ -76,11 +82,10 @@ Type: dirifempty; Name: "{app}"
 "@
           $issContent | Out-File -FilePath "temp_install.iss" -Encoding utf8
 
-      # 编译 install.exe (使用经过验证的 Inno Setup Action)
-      - name: Compile install.exe Installer
-        uses: Minionguyjpro/innosetup-action@v1.1
-        with:
-          script: ./temp_install.iss
+      - name: Compile install.exe
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" temp_install.iss
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -88,7 +93,6 @@ Type: dirifempty; Name: "{app}"
           name: Windows-Build-All
           path: dist_final/
 
-      # 【修复点】env 必须写在步骤级，不能放在 with 里
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
