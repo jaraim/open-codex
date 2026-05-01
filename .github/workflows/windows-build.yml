@@ -42,13 +42,13 @@ jobs:
         shell: pwsh
         run: |
           # 固定入口 src/open_codex/main.py 通用路径
-          pyinstaller --onefile --clean src/open_codex/main.py -n cli
+          pyinstaller --onefile src/open_codex/main.py -n cli
 
       # 5. 通用构建 Desktop 桌面版（GUI 无黑框）
       - name: Build Desktop.exe
         shell: pwsh
         run: |
-          pyinstaller --onefile --windowed --clean src/open_codex/main.py -n desktop
+          pyinstaller --onefile --windowed src/open_codex/main.py -n desktop
 
       # 6. 统一整理所有编译产物到 dist_final 目录
       - name: Organize Build Artifacts
@@ -60,7 +60,7 @@ jobs:
           Copy-Item -Path "dist/cli.exe" -Destination "dist_final/" -Force
           Copy-Item -Path "dist/desktop.exe" -Destination "dist_final/" -Force
 
-      # 7. 动态生成 InnoSetup 安装脚本（通用模板，自动读取仓库名）
+      # 7. 动态生成 InnoSetup 安装脚本
       - name: Auto Generate Inno Setup Script
         shell: pwsh
         run: |
@@ -92,11 +92,19 @@ Type: dirifempty; Name: "{app}"
           # 写入临时安装脚本
           $issContent | Out-File -FilePath "temp_install.iss" -Encoding utf8
 
-      # 8. 编译生成 install.exe 安装程序（替换为稳定的 action）
+      # 8. 编译生成 install.exe 安装程序
       - name: Compile install.exe Installer
-        uses: MiniumDevelopment/innosetup-action@v1
+        uses: jonathanpoelen/innosetup-action@v1
         with:
           script: ./temp_install.iss
+
+      # 8b. 确保安装包被移动到统一的发布目录 (InnoSetup 默认输出可能在根目录或 dist_final)
+      - name: Finalize Installer Path
+        shell: pwsh
+        run: |
+          if (Test-Path "install.exe") {
+            Move-Item -Path "install.exe" -Destination "dist_final/install.exe" -Force
+          }
 
       # 9. 持久化构建产物（网页可下载备份）
       - name: Upload Build Artifacts
@@ -105,15 +113,19 @@ Type: dirifempty; Name: "{app}"
           name: Windows-Build-All
           path: dist_final/
 
-      # 10. 一步到位创建 Release 并上传所有文件（替代旧的 create-release + upload-release-asset）
+      # 10. 自动创建 Release 并一次性上传所有 EXE 产物
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
+          # 通用标签：仓库名+运行编号
           tag_name: ${{ github.event.repository.name }}-build-${{ github.run_number }}
           name: ${{ github.event.repository.name }} Windows 构建 #${{ github.run_number }}
           draft: false
           prerelease: false
+          # 自动上传 dist_final 文件夹下所有 .exe 文件
           files: |
             dist_final/cli.exe
             dist_final/desktop.exe
             dist_final/install.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
