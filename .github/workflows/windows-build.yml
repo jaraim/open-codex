@@ -37,7 +37,8 @@ jobs:
       - name: Build Desktop.exe
         shell: pwsh
         run: |
-          pyinstaller --onefile --paths src src/open_codex/main.py -n desktop
+          pyinstaller --onefile --windowed --paths src --hidden-import tkinter src/desktop_launcher.py -n desktop
+
 
       - name: Prepare Artifacts
         shell: pwsh
