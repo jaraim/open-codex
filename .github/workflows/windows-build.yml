@@ -2,65 +2,52 @@
 # 功能：PyInstaller 打包 cli/desktop + InnoSetup 生成 install.exe + 自动发布 Releases
 name: Windows Universal Build
 
-# 触发规则：指定分支推送 / 手动运行
 on:
   push:
     branches: ["main", "master", "feat/windows-build"]
-  workflow_dispatch: # 支持网页手动点击构建
+  workflow_dispatch:
 
 jobs:
   windows-build:
     runs-on: windows-latest
-    # 开启仓库写入权限，用于创建 Release、上传文件
     permissions:
       contents: write
 
     steps:
-      # 1. 拉取当前项目完整代码
       - name: Checkout Repository Code
         uses: actions/checkout@v4
 
-      # 2. 通用 Python 环境
       - name: Setup Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # 3. 通用依赖安装：自动装 pyinstaller + 项目 requirements.txt
       - name: Install Global Dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
-          # 存在依赖文件则自动安装
           if (Test-Path requirements.txt) {
             pip install -r requirements.txt
           }
 
-      # 4. 通用构建 CLI 版本（无窗口控制台程序）
       - name: Build CLI.exe
         shell: pwsh
         run: |
-          # 固定入口 src/open_codex/main.py 通用路径
           pyinstaller --onefile src/open_codex/main.py -n cli
 
-      # 5. 通用构建 Desktop 桌面版（GUI 无黑框）
       - name: Build Desktop.exe
         shell: pwsh
         run: |
           pyinstaller --onefile --windowed src/open_codex/main.py -n desktop
 
-      # 6. 统一整理所有编译产物到 dist_final 目录
       - name: Organize Build Artifacts
         shell: pwsh
         run: |
-          # 创建统一输出文件夹
           New-Item -ItemType Directory -Force -Path "dist_final"
-          # 复制编译好的 exe 到统一目录
           Copy-Item -Path "dist/cli.exe" -Destination "dist_final/" -Force
           Copy-Item -Path "dist/desktop.exe" -Destination "dist_final/" -Force
 
-      # 7. 动态生成 InnoSetup 安装脚本
       - name: Auto Generate Inno Setup Script
         shell: pwsh
         run: |
@@ -89,40 +76,28 @@ Name: "{commonprograms}\$repoName\命令行工具"; Filename: "{app}\cli.exe"
 [UninstallDelete]
 Type: dirifempty; Name: "{app}"
 "@
-          # 写入临时安装脚本
           $issContent | Out-File -FilePath "temp_install.iss" -Encoding utf8
 
-      # 8. 编译生成 install.exe 安装程序
+      # 使用现成、稳定的 Inno Setup Action
       - name: Compile install.exe Installer
-        uses: jonathanpoelen/innosetup-action@v1
+        uses: Minionguyjpro/innosetup-action@v1.1
         with:
           script: ./temp_install.iss
 
-      # 8b. 确保安装包被移动到统一的发布目录 (InnoSetup 默认输出可能在根目录或 dist_final)
-      - name: Finalize Installer Path
-        shell: pwsh
-        run: |
-          if (Test-Path "install.exe") {
-            Move-Item -Path "install.exe" -Destination "dist_final/install.exe" -Force
-          }
-
-      # 9. 持久化构建产物（网页可下载备份）
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Windows-Build-All
           path: dist_final/
 
-      # 10. 自动创建 Release 并一次性上传所有 EXE 产物
+      # 创建 Release 并一次性上传所有产物（替代弃用的 create-release / upload-release-asset）
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          # 通用标签：仓库名+运行编号
           tag_name: ${{ github.event.repository.name }}-build-${{ github.run_number }}
           name: ${{ github.event.repository.name }} Windows 构建 #${{ github.run_number }}
           draft: false
           prerelease: false
-          # 自动上传 dist_final 文件夹下所有 .exe 文件
           files: |
             dist_final/cli.exe
             dist_final/desktop.exe
